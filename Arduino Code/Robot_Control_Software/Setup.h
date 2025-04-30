@@ -1,5 +1,5 @@
-#ifndef MACROS_H
-#define MACROS_H
+#ifndef SETUP_H
+#define SETUP_H
 
 //Color Sensor Pins
 #define A_OUT 29
@@ -12,6 +12,7 @@
 #define S0 33
 
 #define ARM 0
+
 #define RIGHT 1
 #define MIDDLE 2
 #define LEFT 3

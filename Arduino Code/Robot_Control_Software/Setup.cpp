@@ -1,12 +1,15 @@
-#include "Macros.h"
+#include "Setup.h"
+
+#include <Arduino.h>
+#include <stdint.h>
 
 void pinSetup() 
 {
     //Color Sensor Pin Setup
-    pinMode(A_IN, INPUT);
-    pinMode(R_IN, INPUT);
-    pinMode(M_IN, INPUT);
-    pinMode(L_IN, INPUT);
+    pinMode(A_OUT, INPUT);
+    pinMode(R_OUT, INPUT);
+    pinMode(M_OUT, INPUT);
+    pinMode(L_OUT, INPUT);
   
     pinMode(S3, OUTPUT);
     pinMode(S2, OUTPUT);

@@ -1,9 +1,10 @@
-#include "Macros.h"
+#include "Setup.h"
 #include "Color.h"
-
+#include <stdint.h>
+#include <Arduino.h>
 // Returns an array with red PW values for ARML
 uint16_t* getRedPW() {
-  uint16_t PW[NUM_SENSORS];
+  static uint16_t PW[NUM_SENSORS];
 
   // Set color sensor filter to only detect Red color
   digitalWrite(S2, LOW);
@@ -20,7 +21,7 @@ uint16_t* getRedPW() {
 
 // Returns an array with green PW values for ARML
 uint16_t* getGreenPW() {
-  uint16_t PW[NUM_SENSORS]; 
+  static uint16_t PW[NUM_SENSORS]; 
 
   // Set color sensor filter to only detect green color
   digitalWrite(S2, HIGH);
@@ -37,7 +38,7 @@ uint16_t* getGreenPW() {
 
 // Returns an array with blue PW values for ARML
 uint16_t* getBluePW() {
-  uint16_t PW[NUM_SENSORS]; 
+  static uint16_t PW[NUM_SENSORS]; 
 
   // Set color sensor filter to only detect blue color
   digitalWrite(S2, LOW);
