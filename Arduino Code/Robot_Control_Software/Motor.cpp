@@ -8,14 +8,16 @@ Motor::Motor(uint8_t pwm, uint8_t plus, uint8_t minus) : pwmPin(pwm), plusPin(pl
 void Motor::rotateCW(uint8_t pwm) {
   digitalWrite(plusPin, HIGH);
   digitalWrite(minusPin, LOW);
-  digitalWrite(pwmPin, pwm);
+  analogWrite(pwmPin, pwm);
 }
 void Motor::rotateCCW(uint8_t pwm) {
   digitalWrite(plusPin, LOW);
   digitalWrite(minusPin, HIGH);
-  digitalWrite(pwmPin, pwm);
+  analogWrite(pwmPin, pwm);
 }
 
 void Motor::stop() {
-  digitalWrite(pwmPin, 0);
+  digitalWrite(plusPin, LOW);
+  digitalWrite(minusPin, LOW);
+  analogWrite(pwmPin, 0);
 }

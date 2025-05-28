@@ -17,10 +17,8 @@ void pinSetup()
     pinMode(S0, OUTPUT);
   
     //Ultrasonic Sensor Pin Setup
-    pinMode(ECHO_1, INPUT);
-    pinMode(TRIGGER_1, OUTPUT);
-    pinMode(ECHO_2, INPUT);
-    pinMode(TRIGGER_2, OUTPUT);
+    pinMode(ECHO, INPUT);
+    pinMode(TRIGGER, OUTPUT);
     
     //Drive Motor Pin Setup
     pinMode(IN4_L, OUTPUT);

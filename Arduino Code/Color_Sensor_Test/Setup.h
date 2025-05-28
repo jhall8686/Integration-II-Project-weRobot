@@ -11,6 +11,11 @@
 #define S1 34
 #define S0 33
 
+#define ARM 0
+#define RIGHT 1
+#define MIDDLE 2
+#define LEFT 3
+
 #define NUM_SENSORS 4
 
 //User Buttons
@@ -19,11 +24,8 @@
 #define OBS_BUTTON 20
 
 //Ultrasonic Sensor Pins
-#define ECHO_1 38
-#define TRIGGER_1 37
-
-#define ECHO_2 36
-#define TRIGGER_2 35
+#define ECHO 38
+#define TRIGGER 37
 
 //Drive Motor Pins
 #define IN4_L 19
@@ -41,15 +43,11 @@
 #define ENA_R 11
 
 //Arm Servo Pins
-#define DATA_GRIP 41
-#define DATA_ARM 40
+#define DATA_GRIP 15
+#define DATA_ARM 14
 
-//LED Pins
-
-#define GREEN_LED 4
-#define RED_LED 3
 //User Functions
-//serial.print("silly Goose!!!!!")
+
 void pinSetup();
 void freqScalingSetup();
 
