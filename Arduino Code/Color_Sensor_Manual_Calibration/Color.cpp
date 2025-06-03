@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <Arduino.h>
 // Returns an array with red PW values for ARML
-int* getRedPW() {
-  static int PW[NUM_SENSORS];
+uint16_t* getRedPW() {
+  static uint16_t PW[NUM_SENSORS];
 
   // Set color sensor filter to only detect Red color
   digitalWrite(S2, LOW);
@@ -20,8 +20,8 @@ int* getRedPW() {
 }
 
 // Returns an array with green PW values for ARML
-int* getGreenPW() {
-  static int PW[NUM_SENSORS]; 
+uint16_t* getGreenPW() {
+  static uint16_t PW[NUM_SENSORS]; 
 
   // Set color sensor filter to only detect green color
   digitalWrite(S2, HIGH);
@@ -37,8 +37,8 @@ int* getGreenPW() {
 }
 
 // Returns an array with blue PW values for ARML
-int* getBluePW() {
-  static int PW[NUM_SENSORS]; 
+uint16_t* getBluePW() {
+  static uint16_t PW[NUM_SENSORS]; 
 
   // Set color sensor filter to only detect blue color
   digitalWrite(S2, LOW);

@@ -13,8 +13,6 @@
 
 #define NUM_SENSORS 4
 
-
-
 //User Buttons
 #define PNP_BUTTON 22
 #define CAL_BUTTON 21
@@ -24,8 +22,8 @@
 #define ECHO_1 38
 #define TRIGGER_1 37
 
-#define ECHO_2 27
-#define TRIGGER_2 26
+#define ECHO_2 36
+#define TRIGGER_2 35
 
 //Drive Motor Pins
 #define IN4_L 19
@@ -50,9 +48,6 @@
 
 #define GREEN_LED 4
 #define RED_LED 3
-#define BLUE_LED 2
-
-
 //User Functions
 //serial.print("silly Goose!!!!!")
 void pinSetup();

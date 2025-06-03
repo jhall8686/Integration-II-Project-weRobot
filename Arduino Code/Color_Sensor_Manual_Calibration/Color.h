@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 //Color Functions
-int* getRedPW();
-int* getGreenPW();
-int* getBluePW();
+uint16_t* getRedPW();
+uint16_t* getGreenPW();
+uint16_t* getBluePW();
 #endif

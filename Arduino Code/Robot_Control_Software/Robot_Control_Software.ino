@@ -10,25 +10,25 @@
 ////
 
 //Minimum pulse width values read during calibration (mapped to 255)
-uint16_t minRedPW[] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
-uint16_t minGreenPW[] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
-uint16_t minBluePW[] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+int minRedPW[] = {31,  100, 134, 86};
+int minGreenPW[] = {29, 98, 129, 80};
+int minBluePW[] = {30, 88, 96, 67};
 
 //Maximum pulse width values read during calibration (mapped to 0)
-uint16_t maxRedPW[] = {0, 0, 0, 0};
-uint16_t maxGreenPW[] = {0, 0, 0, 0};
-uint16_t maxBluePW[] = {0, 0, 0, 0};
+int maxRedPW[] = {55, 398, 652, 450};
+int maxGreenPW[] = {58, 424, 666, 444};
+int maxBluePW[] = {55, 381, 493, 376};
 
 //Stores current pulse width read on each color sensor for red, green, and blue
-uint16_t redFreq[NUM_SENSORS];
-uint16_t greenFreq[NUM_SENSORS];
-uint16_t blueFreq[NUM_SENSORS];
+int redFreq[NUM_SENSORS];
+int greenFreq[NUM_SENSORS];
+int blueFreq[NUM_SENSORS];
 
 //Data type for color readings
 struct RGB {
-  uint16_t r;
-  uint16_t g;
-  uint16_t b;
+  int r;
+  int g;
+  int b;
 };
 
 //Stores current read color values for each sensor
@@ -51,8 +51,11 @@ enum STATE {
   CALIBRATE_MAX,
   FIND_PEDESTAL,
   PICKUP,
+  FIND_START_LINE,
   SEARCH,
-  FOLLOW,
+  FOLLOW_RED,
+  FOLLOW_GREEN,
+  FOLLOW_BLUE,
   PLACE,
   OBSTACLE_AVOID
 };
@@ -75,14 +78,14 @@ enum DIRECTION {
 
 DIRECTION Facing = BACKWARD;
 
-COLOR armReadings[] = {OTHER};
-COLOR leftReadings[] = {OTHER};
-COLOR midReadings[] = {OTHER};
-COLOR rightReadings[] = {OTHER};
-
-COLOR mode = OTHER;
+COLOR mode = OTHER;//del
+COLOR boxColor = OTHER;
 STATE Robot_State = IDLE;
 
+//Follow bit storage
+uint8_t redBits = 0b000;
+uint8_t greenBits = 0b000;
+uint8_t blueBits = 0b000;
 //Interrupt flags
 
 uint8_t gCalFlag = 0;
@@ -95,8 +98,12 @@ int size = 0;
 //Ultrasonic Sensor Logic Flags and Variables
 
 uint8_t gObstacleFoundFlag = 0;
-float minDistance = 0.6; //cm
-float boxDistance = 0.01; //cm
+uint8_t gBorderFoundFlag = 0;
+
+float minDistance = 0.6;
+float minWallDistance = 0.8;
+float maxWallDistance = 1;
+float boxDistance = 0.01;
 
 //Initialization of Global Motor Pointers and Servos
 Motor* R1 = nullptr;
@@ -119,8 +126,8 @@ uint16_t lastGripperCommand = 0;
 uint16_t gripperClosed = 180;
 uint16_t gripperOpen = 250;
 
-uint16_t gripperLargeBox = 210;
-uint16_t gripperSmallBox = 190; // ##TODO figure out these values.
+uint16_t gripperLargeBox = 200;
+uint16_t gripperSmallBox = 185; // ##TODO figure out these values.
 
 uint16_t armUp = 100;
 uint16_t armFront = 200; //Technically 200 but worried about wires
@@ -136,6 +143,8 @@ uint8_t boxGrabbed = 0;
 uint8_t largeBox = 0;
 uint8_t smallBox = 0;
 uint8_t servoError = 0;
+
+uint8_t finishLineFound = 0;
 
 uint16_t idleGripperPos = gripperOpen;
 uint16_t idleArmPos = armUp;
@@ -179,7 +188,9 @@ void loop() {
   {
     case IDLE:
       Serial.println("Idle");
-
+      digitalWrite(RED_LED, HIGH);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(BLUE_LED, LOW);
       //
       //Arm/Gripper Idle Loop
       // 
@@ -200,8 +211,9 @@ void loop() {
       //Color Sensor Reading
       //
       readColorSensors();
-      size = sizeof(midReadings)/sizeof(midReadings[0]);
-      mode = calculateMode(midReadings, size);
+      delay(200);
+      // size = sizeof(midReadings)/sizeof(midReadings[0]);
+      // mode = calculateMode(midReadings, size);
       
       for(int i = 0; i < NUM_SENSORS; i++) {
         Serial.println(enumToString(returnColor(color[i])));
@@ -213,10 +225,10 @@ void loop() {
       //Ultrasonic Sensor reading
       //
 
-      distance = ultraPing(1);
-      Serial.println(distance);
-      distance = ultraPing(2);
-      Serial.println(distance);
+      // distance = ultraPing(1);
+      // Serial.println(distance);
+      // distance = ultraPing(2);
+      // Serial.println(distance);
 
 
       //
@@ -239,6 +251,9 @@ void loop() {
       }
       break;
     case CALIBRATE_MIN:
+      digitalWrite(RED_LED, LOW);
+      digitalWrite(GREEN_LED, HIGH);
+      digitalWrite(BLUE_LED, LOW);
       for(int i = 0; i < NUM_SENSORS; i++) {
         Serial.print(minRedPW[i]); Serial.println();
         Serial.print(minGreenPW[i]); Serial.println();
@@ -256,6 +271,9 @@ void loop() {
       }    
       break;
     case CALIBRATE_MAX:
+      digitalWrite(RED_LED, LOW);
+      digitalWrite(GREEN_LED, LOW);
+      digitalWrite(BLUE_LED, HIGH);
       for(int i = 0; i < NUM_SENSORS; i++) {
         Serial.print(maxRedPW[i]); Serial.println();
         Serial.print(maxGreenPW[i]); Serial.println();
@@ -274,6 +292,8 @@ void loop() {
       break;
     case FIND_PEDESTAL:
       Serial.println("FIND_PEDESTAL");
+      digitalWrite(RED_LED, HIGH);
+      digitalWrite(GREEN_LED, HIGH);
       if(!gObstacleFoundFlag) 
       {
         moveForward(med);
@@ -288,7 +308,14 @@ void loop() {
       } 
       else 
       {
-        Robot_State = PICKUP;
+        if(!boxGrabbed)
+        {
+          Robot_State = PICKUP;
+        }
+        else
+        {
+          Robot_State = PLACE;
+        }
         gObstacleFoundFlag = 0;
       }
       break;
@@ -356,9 +383,7 @@ void loop() {
               largeBox = 1;
               boxGrabbed = 1;
             }
-
           } else {
-            
             levelWithBox = 0;
             smallBox = 1;
           }
@@ -367,25 +392,380 @@ void loop() {
       }
       if(boxGrabbed) 
       {
-        Robot_State = FOLLOW;
+        if(returnColor(color[0]) == BLUE) {
+          boxColor = BLUE;
+          digitalWrite(BLUE_LED, HIGH);
+          digitalWrite(RED_LED, LOW);
+          digitalWrite(GREEN_LED, LOW);
+        } else {
+          boxColor = RED;
+          digitalWrite(BLUE_LED, LOW);
+          digitalWrite(RED_LED, HIGH);
+          digitalWrite(GREEN_LED, LOW);
+        }
+        Robot_State = FIND_START_LINE;
       }
       break;
-    case FOLLOW:
+    case FIND_START_LINE:
       readColorSensors();
-      if(Facing == BACKWARD) {
-        turnCCW(med);
-        delay(5000);
+      if(Facing == BACKWARD) 
+      {
+        turnCCW(fast);
+        delay(4200); // dial
         Stop();
         Facing = FORWARD;
       }
-      Serial.println(enumToString(returnColor(color[0])));
+      else {
+        moveForward(fast);
+        if(returnColor(color[1]) == GREEN && returnColor(color[2]) == GREEN && returnColor(color[3]) == GREEN) 
+        {
+          delay(1000); //dial
+          Stop();
+          if(boxColor == BLUE) 
+          {
+            turnCW(med);
+            delay(2500); //dial
+            Stop();
+          }
+          else
+          {
+            turnCCW(med);
+            delay(2500); //dial
+            Stop();
+          }
+          Robot_State = FOLLOW_GREEN;
+        }
+      }
+      break;
+    case FOLLOW_GREEN:
+      readColorSensors();
+      //Define green bits
+      returnColor(color[3]) == GREEN ? greenBits |= 0b100 : greenBits &= ~(0b100);
+      returnColor(color[2]) == GREEN ? greenBits |= 0b010 : greenBits &= ~(0b010);
+      returnColor(color[1]) == GREEN ? greenBits |= 0b001 : greenBits &= ~(0b001);
+
+      //movement truth table
+      switch(greenBits) 
+      {
+        case 0b000:
+          //turn, searching for a green bit
+          Stop();
+          break;
+        case 0b001:
+          //Too far left
+          turnCW(fast);
+          break;
+        case 0b010:
+          //right on target
+          moveForward(fast);
+          break;
+        case 0b011:
+          //a little off to the left (perhaps alignment with line, so little CW turn to hopefully make it straight with the line)
+          moveForward(fast);
+          break;
+        case 0b100:
+          //Too far right
+          turnCCW(fast);
+          break;
+        case 0b101:
+          //Confused (turn to find a better spot);
+          Stop();
+          delay(100);
+          turnCW(fast);
+          break;
+        case 0b110:
+          //a little off to the right (perhaps alignment with line, so little CCW turn to hopefully make it straight with the line)
+
+          moveForward(fast);
+          break;
+        case 0b111:
+          //literally at a stop line (center on the line, rotate 90 degrees and try again)
+          moveForward(fast);
+          break;
+      }
+      
+      //exit condition
+      if(boxColor == BLUE)
+      {
+        if(returnColor(color[3]) == BLUE)
+        {
+          delay(1000);//dial
+          Stop();
+          turnCCW(fast);
+          delay(1500);
+          Robot_State = FOLLOW_BLUE;
+        }
+        if(returnColor(color[1]) == BLUE)
+        {
+          delay(1000);
+          Stop();
+          turnCW(fast);
+          delay(1500);
+          Robot_State = FOLLOW_BLUE;
+        }
+      }
+      if(boxColor == RED)
+      {
+        if(returnColor(color[3]) == RED)
+        {
+          delay(1000);//dial
+          Stop();
+          turnCCW(fast);
+          delay(1500);
+          Robot_State = FOLLOW_RED;
+        }
+        if(returnColor(color[1]) == RED)
+        {
+          delay(1000);
+          Stop();
+          turnCW(fast);
+          delay(1500);
+          Robot_State = FOLLOW_RED;
+        }
+      }
       
       break;
+    case FOLLOW_BLUE:
+      readColorSensors();
+
+      digitalWrite(GREEN_LED, HIGH);
+
+      //Define blue bits
+      returnColor(color[3]) == BLUE ? blueBits |= 0b100 : blueBits &= ~(0b100);
+      returnColor(color[2]) == BLUE ? blueBits |= 0b010 : blueBits &= ~(0b010);
+      returnColor(color[1]) == BLUE ? blueBits |= 0b001 : blueBits &= ~(0b001);
+
+      //movement truth table
+      switch(blueBits) 
+      {
+        case 0b000:
+          //probably the yellow section
+          moveForward(fast);
+          break;
+        case 0b001:
+          //Too far left
+          turnCW(fast);
+          break;
+        case 0b010:
+          //right on target
+          moveForward(fast);
+          break;
+        case 0b011:
+          //a little off to the left (perhaps alignment with line, so little CW turn to hopefully make it straight with the line)
+          moveForward(fast);
+          break;
+        case 0b100:
+          //Too far right
+          turnCCW(fast);
+          break;
+        case 0b101:
+          //Confused (turn to find a better spot);
+          Stop();
+          delay(100);
+          turnCW(fast);
+          break;
+        case 0b110:
+          //a little off to the right (perhaps alignment with line, so little CCW turn to hopefully make it straight with the line)
+          moveForward(fast);
+          break;
+        case 0b111:
+
+          //The end of the course-- decide small or large
+          if(finishLineFound)
+          {
+            if(smallBox)
+            {
+              moveRight(med);
+              delay(500);//dial
+              moveForward(med);
+              Robot_State = FIND_PEDESTAL;
+            }
+            if(largeBox)
+            {
+              moveLeft(med);
+              delay(500);//dial
+              moveForward(med);
+              Robot_State = FIND_PEDESTAL;
+            }
+          } else 
+          {
+            moveForward(fast);
+          }
+
+
+          break;
+      }
+      //reach green finish line exit condition
+      if(returnColor(color[1]) == GREEN && returnColor(color[2]) == GREEN && returnColor(color[3]) == GREEN)
+      {
+        delay(500); //dial
+        Stop();
+        turnCW(med);
+        delay(2500); //dial
+        Robot_State = FOLLOW_GREEN;
+      }
+
+      break;
+    case FOLLOW_RED:
+      readColorSensors();
+
+
+      digitalWrite(GREEN_LED, HIGH);
+      //Define blue bits
+      returnColor(color[3]) == RED ? redBits |= 0b100 : redBits &= ~(0b100);
+      returnColor(color[2]) == RED ? redBits |= 0b010 : redBits &= ~(0b010);
+      returnColor(color[1]) == RED ? redBits |= 0b001 : redBits &= ~(0b001);
+      
+      //follow truth table
+      switch(redBits) 
+      {
+        case 0b000:
+          //probably the yellow section (keep on keepin on for 2 seconds)
+          moveForward(fast);
+          break;
+        case 0b001:
+          //Too far left
+          turnCW(fast);
+          break;
+        case 0b010:
+          //right on target
+          moveForward(fast);
+          break;
+        case 0b011:
+          //a little off to the left (perhaps alignment with line, so little CW turn to hopefully make it straight with the line)
+
+          moveForward(fast);
+          break;
+        case 0b100:
+          //Too far right
+          turnCCW(fast);
+          break;
+        case 0b101:
+          //Confused (turn to find a better spot);
+          Stop();
+          delay(100);
+          turnCW(med);
+          break;
+        case 0b110:
+          //a little off to the right (perhaps alignment with line, so little CCW turn to hopefully make it straight with the line)
+          moveForward(fast);
+          break;
+        case 0b111:
+          //The end of the course-- decide small or large
+          if(smallBox)
+          {
+            moveRight(fast);
+            delay(500);
+            moveForward(fast);
+            Robot_State = FIND_PEDESTAL;
+          }
+          if(largeBox)
+          {
+            moveLeft(fast);
+            delay(500);
+            moveForward(fast);
+            Robot_State = FIND_PEDESTAL;
+          }
+          break;
+      }
+
+      //reach green finish line exit condition
+      if(returnColor(color[1]) == GREEN && returnColor(color[2]) == GREEN && returnColor(color[3]) == GREEN)
+      {
+        delay(500); //dial
+        Stop();
+        turnCCW(med);
+        delay(2500); //dial
+        Robot_State = FOLLOW_GREEN;
+      }
+
+      break;
     case PLACE:
+
       break;
     case OBSTACLE_AVOID:
-      Serial.println("OBSTACLE_AVOID");
-      delay(200);
+
+      digitalWrite(RED_LED, HIGH);
+      digitalWrite(GREEN_LED, HIGH);
+      digitalWrite(BLUE_LED, HIGH);
+      //
+      //Arm/Gripper Idle Loop
+      // 
+      currentArmPos = Arm.read();
+      currentGripperPos = Gripper.read();
+
+
+      if(abs(currentArmPos - toServoPos(idleArmPos)) > armTolerance) 
+      {
+        Arm.write(toServoPos(idleArmPos));
+      }
+      if(abs(currentGripperPos - toServoPos(idleGripperPos)) > gripperTolerance) 
+      {
+        Gripper.write(toServoPos(idleGripperPos));
+      }
+
+
+      //
+      //Obstacle Avoid Algorithm
+      //
+      distance = ultraPing(1);
+      readColorSensors();
+      //Loop for finding the wall
+      if(!gObstacleFoundFlag)
+      {
+        if(distance <= minWallDistance) 
+        {
+          Stop();
+
+          gObstacleFoundFlag = 1;
+        } 
+        else 
+        {
+          moveForward(fast);
+        }        
+      }
+
+      //Loop for once the wall is found
+      else
+      {
+        //aligned to the right border-- should always move right unless we've hit the right border.
+
+        Serial.println(gBorderFoundFlag);
+        gBorderFoundFlag ? moveLeft(fast) : moveRight(fast);
+        
+        //Check for gap
+        if(returnColor(color[1]) == WHITE && !gBorderFoundFlag) {
+          Stop();
+          gBorderFoundFlag = 1;
+        }
+        if(distance > maxWallDistance) 
+        {
+          delay(1300);
+          Stop();
+          gObstacleFoundFlag = 0;
+          gBorderFoundFlag = 0;
+        }
+      }
+
+      //
+      //Course Completed Check
+      //
+
+      if(returnColor(color[1]) == GREEN && returnColor(color[2]) == GREEN && returnColor(color[3]) == GREEN) {
+        Serial.println("Course Completed");
+        Stop(); 
+        gObstacleFoundFlag = 0;
+        gBorderFoundFlag = 0;
+        Robot_State = IDLE;
+      }
+
+      //Manual Exit Override
+      if(gObsFlag) {
+        delay(debounce);
+        Stop();
+        Robot_State = IDLE;
+        gObsFlag = 0;
+      }
       break;
     default:
       break;
@@ -403,20 +783,23 @@ void loop() {
 //Reads the frequencies from each color sensor then sets each color struct accordingly
 ////
 void readColorSensors() {
-  uint16_t* redFreq = getRedPW();
-  uint16_t* greenFreq = getGreenPW();
-  uint16_t* blueFreq = getBluePW();
+  int* redFreq = getRedPW();
+  delay(10);
+  int* greenFreq = getGreenPW();
+  delay(10);
+  int* blueFreq = getBluePW();
+  delay(10);
 
   for(uint8_t i = 0; i < NUM_SENSORS; i++) {
-    color[i].r = map(redFreq[i], minRedPW[i], maxRedPW[i], 255, 0);
-    color[i].g = map(greenFreq[i], minGreenPW[i], maxGreenPW[i], 255, 0);
-    color[i].b = map(blueFreq[i], minBluePW[i], maxBluePW[i], 255, 0);
+    color[i].r = map((long)redFreq[i], (long)minRedPW[i], (long)maxRedPW[i], 255, 0);
+    color[i].g = map((long)greenFreq[i], (long)minGreenPW[i], (long)maxGreenPW[i], 255, 0);
+    color[i].b = map((long)blueFreq[i], (long)minBluePW[i], (long)maxBluePW[i], 255, 0);    
   }
 
 }
 
 COLOR returnColor(struct RGB c) {
-  if(c.r < 50 && c.g < 50 && c.b < 50) {
+  if(c.r < 70 && c.g < 70 && c.b < 70) {
     return BLACK;
   }
   else if(c.r>200 && c.g>200 && c.b>200) {
@@ -435,7 +818,7 @@ COLOR returnColor(struct RGB c) {
     return OTHER;
   }
 }
-
+//I'll probably delete this
 COLOR calculateMode(const COLOR* colors, int size) {
   int counts[6] = {0};  // One slot per COLOR
 
@@ -475,9 +858,9 @@ char* enumToString(COLOR color)
 ////          ***Should run when looking at white***
 
 void calibrateSensorsMin() {
-  uint16_t* readRedPW = getRedPW();
-  uint16_t* readGreenPW = getGreenPW();
-  uint16_t* readBluePW = getBluePW();
+  int* readRedPW = getRedPW();
+  int* readGreenPW = getGreenPW();
+  int* readBluePW = getBluePW();
   
   //check for each color sensor whether the new reading is older
   for(uint8_t i = 0; i < NUM_SENSORS; i++) 
@@ -500,9 +883,9 @@ void calibrateSensorsMin() {
 ////          ***Should run while looking at black***
 
 void calibrateSensorsMax() {
-  uint16_t* readRedPW = getRedPW();
-  uint16_t* readGreenPW = getGreenPW();
-  uint16_t* readBluePW = getBluePW();
+  int* readRedPW = getRedPW();
+  int* readGreenPW = getGreenPW();
+  int* readBluePW = getBluePW();
   
   //check for each color sensor whether the new reading is older
   for(uint8_t i = 0; i < NUM_SENSORS; i++) 
@@ -520,6 +903,8 @@ void calibrateSensorsMax() {
 
   //DELAY??
 }
+
+
 
 
 
@@ -679,11 +1064,20 @@ void diamondDanceCCW(uint8_t pwm) {
 ///////////////////////////////////
 
 void calibrateButtonPressed() {
-  gCalFlag = 1;
+  if(Robot_State == IDLE || Robot_State == CALIBRATE_MAX || Robot_State == CALIBRATE_MIN)
+  {
+      gCalFlag = 1;
+  }
 }
 void pnpButtonPressed() {
-  gPnpFlag = 1;
+  if(Robot_State == IDLE)
+  {
+    gPnpFlag = 1;
+  }
 }
 void obsButtonPressed() {
-  gObsFlag = 1;
+  if(Robot_State == IDLE || Robot_State == OBSTACLE_AVOID)
+  {
+    gObsFlag = 1;
+  }
 }

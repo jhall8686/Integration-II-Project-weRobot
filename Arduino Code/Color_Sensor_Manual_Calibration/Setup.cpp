@@ -45,10 +45,6 @@ void pinSetup()
     pinMode(CAL_BUTTON, INPUT_PULLUP);
     pinMode(PNP_BUTTON, INPUT_PULLUP);
     pinMode(OBS_BUTTON, INPUT_PULLUP);
-
-    pinMode(RED_LED, OUTPUT);
-    pinMode(GREEN_LED, OUTPUT);
-    pinMode(BLUE_LED, OUTPUT);
 }
 
 void freqScalingSetup() {
