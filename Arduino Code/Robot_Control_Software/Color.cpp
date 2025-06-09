@@ -38,7 +38,8 @@ int* getGreenPW() {
 
 // Returns an array with blue PW values for ARML
 int* getBluePW() {
-  static int PW[NUM_SENSORS]; 
+  static int
+   PW[NUM_SENSORS]; 
 
   // Set color sensor filter to only detect blue color
   digitalWrite(S2, LOW);

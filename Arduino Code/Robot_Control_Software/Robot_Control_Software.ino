@@ -9,15 +9,16 @@
 //Color Sensor Global Variables
 ////
 
-//Minimum pulse width values read during calibration (mapped to 255)
-int minRedPW[] = {31,  100, 134, 86};
-int minGreenPW[] = {29, 98, 129, 80};
-int minBluePW[] = {30, 88, 96, 67};
+//^^ Calibration Tables
+//Minimum pulse width values read during calibration (mapped to 255) (White)
+int minRedPW[] = {23,  98, 106, 87};
+int minGreenPW[] = {26, 95,103, 81};
+int minBluePW[] = {22, 85, 76, 68};
 
-//Maximum pulse width values read during calibration (mapped to 0)
-int maxRedPW[] = {55, 398, 652, 450};
-int maxGreenPW[] = {58, 424, 666, 444};
-int maxBluePW[] = {55, 381, 493, 376};
+//Maximum pulse width values read during calibration (mapped to 0) (Black)
+int maxRedPW[] = {45, 452, 498, 384};
+int maxGreenPW[] = {37, 480,518, 379};
+int maxBluePW[] = {38, 434, 388, 318};
 
 //Stores current pulse width read on each color sensor for red, green, and blue
 int redFreq[NUM_SENSORS];
@@ -56,7 +57,9 @@ enum STATE {
   FOLLOW_RED,
   FOLLOW_GREEN,
   FOLLOW_BLUE,
+  FINISH,
   PLACE,
+  RETURN,
   OBSTACLE_AVOID
 };
 
@@ -101,8 +104,8 @@ uint8_t gObstacleFoundFlag = 0;
 uint8_t gBorderFoundFlag = 0;
 
 float minDistance = 0.6;
-float minWallDistance = 0.8;
-float maxWallDistance = 1;
+float minWallDistance = 1;
+float maxWallDistance = 1.3;
 float boxDistance = 0.01;
 
 //Initialization of Global Motor Pointers and Servos
@@ -143,8 +146,10 @@ uint8_t boxGrabbed = 0;
 uint8_t largeBox = 0;
 uint8_t smallBox = 0;
 uint8_t servoError = 0;
-
+uint8_t boxPlaced = 0;
 uint8_t finishLineFound = 0;
+uint8_t returnLineFound = 0;
+
 
 uint16_t idleGripperPos = gripperOpen;
 uint16_t idleArmPos = armUp;
@@ -153,7 +158,7 @@ uint16_t idleArmPos = armUp;
 uint8_t slow = 63;
 uint8_t med = 127;
 uint8_t fast = 191;
-uint8_t fastest = 255;
+uint8_t fastest = 250;
 
 int count = 0;
 float distance;
@@ -296,7 +301,7 @@ void loop() {
       digitalWrite(GREEN_LED, HIGH);
       if(!gObstacleFoundFlag) 
       {
-        moveForward(med);
+        moveForward(fast);
         distance = ultraPing(1);
         Serial.print(distance);
         if(distance <= minDistance) 
@@ -337,12 +342,18 @@ void loop() {
           }
           //wait for motors to get there
           delay(200);
-
-          //#DEBUG
-          Serial.println(Arm.read());
-          Serial.println(Arm.read()-toServoPos(armFront));
-          Serial.println(armTolerance);
-          //#DEBUG
+          // changed color values^^
+          if(returnColor(color[0]) == BLUE) {
+            boxColor = BLUE;
+            digitalWrite(BLUE_LED, LOW);
+            digitalWrite(RED_LED, HIGH);
+            digitalWrite(GREEN_LED, LOW);
+          } else {
+            boxColor = RED;
+            digitalWrite(BLUE_LED, HIGH);
+            digitalWrite(RED_LED, LOW);
+            digitalWrite(GREEN_LED, LOW);
+          }
 
           //Check if arm is level with the box
           if(abs(Arm.read() - toServoPos(armFront)) < armTolerance)
@@ -364,14 +375,14 @@ void loop() {
           delay(200);
 
           //Arm -> Up
-          for(uint16_t pos = armFront; pos > armUp; pos-=armStep) 
+          for(uint16_t pos = armFront; pos > armUp-armStep; pos-=armStep) 
           {
             Serial.println("step completed");
             Arm.write(toServoPos(pos));
             delay(timeStep);
           }
           //wait for motor to get there
-          delay(200);
+          delay(300);
           
           if(ultraPing(2) < boxDistance) 
           {
@@ -392,17 +403,6 @@ void loop() {
       }
       if(boxGrabbed) 
       {
-        if(returnColor(color[0]) == BLUE) {
-          boxColor = BLUE;
-          digitalWrite(BLUE_LED, HIGH);
-          digitalWrite(RED_LED, LOW);
-          digitalWrite(GREEN_LED, LOW);
-        } else {
-          boxColor = RED;
-          digitalWrite(BLUE_LED, LOW);
-          digitalWrite(RED_LED, HIGH);
-          digitalWrite(GREEN_LED, LOW);
-        }
         Robot_State = FIND_START_LINE;
       }
       break;
@@ -423,17 +423,21 @@ void loop() {
           Stop();
           if(boxColor == BLUE) 
           {
-            turnCW(med);
-            delay(2500); //dial
+            turnCW(fast);
+            delay(2000); //dial
             Stop();
           }
           else
           {
-            turnCCW(med);
-            delay(2500); //dial
+            turnCCW(fast);
+            delay(2000); //dial
             Stop();
           }
-          Robot_State = FOLLOW_GREEN;
+          if(!boxPlaced) 
+          {
+            Robot_State = FOLLOW_GREEN;
+          }
+
         }
       }
       break;
@@ -495,25 +499,25 @@ void loop() {
           delay(1500);
           Robot_State = FOLLOW_BLUE;
         }
-        if(returnColor(color[1]) == BLUE)
-        {
-          delay(1000);
-          Stop();
-          turnCW(fast);
-          delay(1500);
-          Robot_State = FOLLOW_BLUE;
-        }
+        // if(returnColor(color[1]) == BLUE)
+        // {
+        //   delay(1000);
+        //   Stop();
+        //   turnCW(fast);
+        //   delay(1500);
+        //   Robot_State = FOLLOW_BLUE;
+        // }
       }
       if(boxColor == RED)
       {
-        if(returnColor(color[3]) == RED)
-        {
-          delay(1000);//dial
-          Stop();
-          turnCCW(fast);
-          delay(1500);
-          Robot_State = FOLLOW_RED;
-        }
+        // if(returnColor(color[3]) == RED)
+        // {
+        //   delay(1000);//dial
+        //   Stop();
+        //   turnCCW(fast);
+        //   delay(1500);
+        //   Robot_State = FOLLOW_RED;
+        // }
         if(returnColor(color[1]) == RED)
         {
           delay(1000);
@@ -571,38 +575,23 @@ void loop() {
         case 0b111:
 
           //The end of the course-- decide small or large
-          if(finishLineFound)
-          {
-            if(smallBox)
-            {
-              moveRight(med);
-              delay(500);//dial
-              moveForward(med);
-              Robot_State = FIND_PEDESTAL;
-            }
-            if(largeBox)
-            {
-              moveLeft(med);
-              delay(500);//dial
-              moveForward(med);
-              Robot_State = FIND_PEDESTAL;
-            }
-          } else 
-          {
-            moveForward(fast);
-          }
-
+          moveForward(fast);
 
           break;
       }
       //reach green finish line exit condition
       if(returnColor(color[1]) == GREEN && returnColor(color[2]) == GREEN && returnColor(color[3]) == GREEN)
       {
-        delay(500); //dial
-        Stop();
-        turnCW(med);
-        delay(2500); //dial
-        Robot_State = FOLLOW_GREEN;
+        if(!boxPlaced)
+        {
+          finishLineFound = 1;
+          Robot_State = FINISH;
+        }
+        else
+        {
+          Stop();
+          Robot_State = IDLE;
+        }
       }
 
       break;
@@ -652,36 +641,92 @@ void loop() {
           break;
         case 0b111:
           //The end of the course-- decide small or large
-          if(smallBox)
-          {
-            moveRight(fast);
-            delay(500);
-            moveForward(fast);
-            Robot_State = FIND_PEDESTAL;
-          }
-          if(largeBox)
-          {
-            moveLeft(fast);
-            delay(500);
-            moveForward(fast);
-            Robot_State = FIND_PEDESTAL;
-          }
-          break;
+          moveForward(fast);
+
       }
 
       //reach green finish line exit condition
       if(returnColor(color[1]) == GREEN && returnColor(color[2]) == GREEN && returnColor(color[3]) == GREEN)
       {
-        delay(500); //dial
-        Stop();
-        turnCCW(med);
-        delay(2500); //dial
-        Robot_State = FOLLOW_GREEN;
+        if(!boxPlaced)
+        {
+          finishLineFound = 1;
+          Robot_State = FINISH;
+        }
+        else
+        {
+          Stop();
+          Robot_State = IDLE;
+        }
       }
 
       break;
+    case FINISH:
+    //^^ Hard-coded at the end
+      moveForward(fast);
+      delay(4000);
+      if(smallBox)
+      {
+        moveLeft(fast);
+      }
+      else
+      {
+        moveRight(fast);
+      }
+      delay(1800);
+      Robot_State = FIND_PEDESTAL;
+      break;
     case PLACE:
-
+      //Arm -> Front
+      for(uint16_t pos = armUp; pos < armFront; pos+=armStep) 
+      {
+        Serial.println("step completed");
+        Arm.write(toServoPos(pos));
+        delay(timeStep);
+      }
+      //wait for motors to get there
+      delay(200);
+     //drop the box 
+      Gripper.write(toServoPos(idleGripperPos));
+      delay(200);
+      //Arm -> Up
+      for(uint16_t pos = armFront; pos > armUp; pos-=armStep) 
+      {
+        Serial.println("step completed");
+        Arm.write(toServoPos(pos));
+        delay(timeStep);
+      }
+      //wait for motor to get there
+      delay(200);
+      boxPlaced = 1;
+      turnCCW(fast);
+      delay(4200); // dial
+      Stop();
+      finishLineFound = 0;
+      Robot_State = RETURN;
+      break;
+    case RETURN:
+      moveForward(fast);
+      delay(2000);
+      if(smallBox)
+      {
+        moveLeft(fast);
+      }
+      else
+      {
+        moveRight(fast);
+      }
+      delay(1800);
+      moveForward(fast);
+      delay(4500);
+      if(boxColor == BLUE)
+      {
+        Robot_State = FOLLOW_BLUE;
+      }
+      else 
+      {
+        Robot_State = FOLLOW_RED;
+      }
       break;
     case OBSTACLE_AVOID:
 
@@ -715,6 +760,10 @@ void loop() {
       {
         if(distance <= minWallDistance) 
         {
+          //turnCW(fast);
+          //delay(100);
+          // moveBackward(fast);
+          // delay(300);
           Stop();
 
           gObstacleFoundFlag = 1;
@@ -797,9 +846,9 @@ void readColorSensors() {
   }
 
 }
-
+//^^
 COLOR returnColor(struct RGB c) {
-  if(c.r < 70 && c.g < 70 && c.b < 70) {
+  if(c.r < 90 && c.g < 90 && c.b < 90) {
     return BLACK;
   }
   else if(c.r>200 && c.g>200 && c.b>200) {
@@ -947,26 +996,26 @@ float ultraPing(int sensor)
 //pwm = 0-255
 void moveForward(uint8_t pwm) {
   R1->rotateCW(pwm);
-  R2->rotateCW(pwm);
+  R2->rotateCW(pwm+10);
   L1->rotateCCW(pwm);
   L2->rotateCCW(pwm);
 }
 void moveBackward(uint8_t pwm) {
   R1->rotateCCW(pwm);
-  R2->rotateCCW(pwm);
+  R2->rotateCCW(pwm+10);
   L1->rotateCW(pwm);
   L2->rotateCW(pwm);
 }
 void moveLeft(uint8_t pwm) {
   R1->rotateCW(pwm);
   L1->rotateCW(pwm);
-  R2->rotateCCW(pwm);
+  R2->rotateCCW(pwm+10);
   L2->rotateCCW(pwm);
 }
 void moveRight(uint8_t pwm) {
   R1->rotateCCW(pwm);  
   L1->rotateCCW(pwm);
-  R2->rotateCW(pwm);
+  R2->rotateCW(pwm+10);
   L2->rotateCW(pwm);
 }
 void moveFR(uint8_t pwm) {
